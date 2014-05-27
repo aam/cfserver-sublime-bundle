@@ -1,0 +1,38 @@
+[
+	{
+		"caption": "Preferences",
+		"id": "preferences",
+		"mnemonic": "n",
+		"children":
+		[
+			{
+				"caption": "Package Settings",
+				"id": "package-settings",
+				"mnemonic": "P",
+				"children":
+				[
+					{
+						"caption": "SublimeLinter-contrib-cfserver",
+						"children":
+						[
+							{
+								"caption": "Settings – Default",
+								"command": "open_file", "args":
+								{
+									"file": "${packages}/SublimeLinter-contrib-cfserver/SublimeLinter-contrib-cfserver.sublime-settings"
+								}
+							},
+							{
+								"caption": "Settings – User",
+								"command": "open_file", "args":
+								{
+									"file": "${packages}/User/SublimeLinter-contrib-cfserver.sublime-settings"
+								}
+							},
+						]
+					}
+				]
+			}
+		]
+	}
+]
