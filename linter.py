@@ -13,21 +13,149 @@
 import subprocess
 import os
 import threading
-import SublimeLinter
+import re
+import time
+
 import sublime
+import sublime_plugin
+
+import SublimeLinter
 
 # from Default.exec import ProcessListener, AsyncProcess
 
+class Daemon:
+    def __init__(self, cmd):
+        self.start(cmd)
+        self.id = 0
+        self.responses = {}
 
-class CfserverListener:
-    def on_data(self, proc, data):
-        print("CfserverListener.on_data: proc=%s data=%s" % (proc, data))
+    def getNextUniqueId(self):
+        self.id += 1
+        return self.id
 
-    def on_finished(self, proc):
-        print("CfserverListener.on_finished: proc=%s" % (proc))
-        pass
+    def getErrors(self, responseId):
+        nAttempts = 10
+        while (not responseId in self.responses and nAttempts>0):
+            time.sleep(1)  # sleep 1s econd
+            nAttempts -= 1
 
-class Cfserver(Linter):
+        return self.responses.pop(responseId)
+
+    reErrors = re.compile(
+        r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
+        r'(?P<allerrors>((.*)\r?\n)+)'
+        r'^ERRORS-END\r?\n',
+        re.MULTILINE)
+
+    def on_data(self, data):
+        s = data.decode(encoding="ASCII")
+        print("on_data: s=%s" % (s))
+        match = Daemon.reErrors.match(s)
+        if match:
+            self.responses[int(match.group('id'))] = match.group('allerrors')
+
+    def on_finished(self):
+       print("on_finished")
+
+    def read_stdout(self):
+        while True:
+            data = os.read(self.proc.stdout.fileno(), 2**15)
+
+            if len(data) > 0:
+                self.on_data(data)
+            else:
+                self.proc.stdout.close()
+                self.on_finished()
+                break
+
+    def read_stderr(self):
+        while True:
+            data = os.read(self.proc.stderr.fileno(), 2**15)
+
+            if len(data) > 0:
+                self.on_data(data)
+            else:
+                self.proc.stderr.close()
+                break
+
+    def start(self, cmd):
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+        print("Starting " + cmd)
+
+        self.proc = subprocess.Popen(
+            [cmd, '--codeblocks', '--disable-cancel',
+            ],
+            stdin = subprocess.PIPE,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE,
+            startupinfo=startupinfo)
+
+        threading.Thread(target=self.read_stdout).start()
+        threading.Thread(target=self.read_stderr).start()
+
+        print("Started cfserver proc pid=%d" % (self.proc.pid))
+
+        self.proc.stdin.write(bytes(
+r'''
+# source "C:\\Users\\alexander.APRELEV\\Downloads\\CppTools\\CppTools\\lib\\profile.tcl"
+begin-config cmode
+gcc -c "gcc"
+# #user-source-root "C:/Users/alexander.APRELEV/IdeaProjects/untitled"
+define WIN32 "1"
+define NDEBUG "1"
+define _WINDOWS "1"
+define _MBCS "1"
+define _AFXDLL "1"
+define _WIN32 "1"
+warning -implicit_cast_to_bool
+warning +name_never_referenced
+warning -name_used_only_once
+warning +redundant_cast
+warning +redundant_qualifier
+warning +static_call_from_value
+warning -redundant_brackets
+warning +report_multiple_defs
+# option +out_errorcodes
+end-config
+begin-config cppmode
+g++ -c "g++"
+# #user-source-root "C:/Users/alexander.APRELEV/IdeaProjects/untitled"
+define WIN32 "1"
+define NDEBUG "1"
+define _WINDOWS "1"
+define _MBCS "1"
+define _AFXDLL "1"
+define _WIN32 "1"
+warning -implicit_cast_to_bool
+warning +name_never_referenced
+warning -name_used_only_once
+warning +redundant_cast
+warning +redundant_qualifier
+warning +static_call_from_value
+warning -redundant_brackets
+warning +report_multiple_defs
+# option +out_errorcodes
+end-config
+unused
+list-errors
+''', "ascii"))
+
+
+    def ensureActive(self, cmd):
+        # if process was never started or if it exited, then restart
+        if (self.proc == None or self.proc.poll() != None):
+            self.start(cmd)
+
+    def sendCommand(self, command):
+        print("sending %s" % (command))
+        self.proc.stdin.write(bytes(command + "\n", "ascii"))
+        self.proc.stdin.flush()
+
+class Cfserver(SublimeLinter.sublimelinter.Linter):
 
     """Provides an interface to cfserver."""
 
@@ -37,70 +165,24 @@ class Cfserver(Linter):
     version_args = '--version'
     version_re = r'(?P<version>\d+\.\d+\.\d+)'
     version_requirement = '>= 1.0'
-    regex = 'ERROR (?P<line>\d+) (?P<col>\d+) (?P<error>\d+) (?P<message>.+)'
-    multiline = False
-    line_col_base = (1, 1)
+
+    regex = r'(?:(?P<error>ERROR)|(?P<warning>WARN)|(?P<info>INFO)) (?P<line>\d+) (?P<col>\d+) (?P<message>.+)'
+    multiline = True
+    line_col_base = (0, 0)
     tempfile_suffix = None
-    error_stream = util.STREAM_BOTH
+    error_stream = None
     selectors = {}
     word_re = None
     defaults = {}
     inline_settings = None
     inline_overrides = None
     comment_re = None
-    cfserver = None
-    cfserverListener = CfserverListener()
 
     def __init__(self, view, syntax):
-        Linter.__init__(self, view, syntax)
-
-    def write_stdin(self):
-        Cfserver.cfserver.stdin.write(bytes(
-r'''
-source "C:\\Users\\alexander.APRELEV\\Downloads\\CppTools\\CppTools\\lib\\profile.tcl"
-# version 0.8.3 (Win32) build no. 1 on Feb 28 2012 14:45:38
-# Command: "C:/Users/alexander.APRELEV/.IntelliJIdea13/system/plugins-sandbox/plugins/CppTools/lib/cfserver.exe" --idea --catchexceptions --inLogName C:\\Users\\alexander.APRELEV\\.IntelliJIdea13\\system\\plugins-sandbox\\plugins\\CppTools\\logs\\untitled\in --outLogName C:\\Users\\alexander.APRELEV\\.IntelliJIdea13\\system\\plugins-sandbox\\plugins\\CppTools\\logs\\untitled\\out
-# Library: $Id: lib.tcl, 2010/11/26 14:27 shd Exp $
-#timer: 0.003
-source "C:\\Users\\alexander.APRELEV\\Downloads\\CppTools\\CppTools\\lib\\lib.tcl"
-#timer: 0.004
-use-abs-path
-begin-config cmode
-gcc -c "gcc"
-#timer: 0.53
-user-source-root "C:/Users/alexander.APRELEV/IdeaProjects/untitled"
-define WIN32 "1"
-'''
-            , "ascii"))
-        Cfserver.cfserver.stdin.flush()
-
-    def read_stdout(self):
-        while True:
-            data = os.read(Cfserver.cfserver.stdout.fileno(), 2**15)
-
-            if len(data) > 0:
-                if Cfserver.cfserverListener:
-                    Cfserver.cfserverListener.on_data(self, data)
-            else:
-                Cfserver.cfserver.stdout.close()
-                if Cfserver.cfserverListener:
-                    Cfserver.cfserverListener.on_finished(self)
-                break
-
-    def read_stderr(self):
-        while True:
-            data = os.read(Cfserver.cfserver.stderr.fileno(), 2**15)
-
-            if len(data) > 0:
-                if Cfserver.cfserverListener:
-                    Cfserver.cfserverListener.on_data(self, data)
-            else:
-                Cfserver.cfserver.stderr.close()
-                break
+        SublimeLinter.sublimelinter.Linter.__init__(self, view, syntax)
 
     def get_settings():
         return sublime.load_settings("SublimeLinter-contrib-cfserver.sublime-settings")
-
 
     def get_setting(key, default=None, view=None):
         try:
@@ -113,38 +195,64 @@ define WIN32 "1"
             pass
         return Cfserver.get_settings().get(key, default)
 
+    daemon = None
+
     def run(self, cmd, code):
-        print("cfserver")
+        print("cfserver run started in %s" % (sublime.active_window().active_view().file_name()))
+        return Cfserver.analyzeModule(sublime.active_window().active_view())
 
-        print("Initialized cfserver linter. [Re]starting cfserver = %s" % Cfserver.cfserver)
-        if Cfserver.cfserver != None and Cfserver.cfserver.poll() == None:
-            print("Cfserver already running with pid %d" % (Cfserver.cfserver.pid))
+
+    @staticmethod
+    def getDaemon():
+        if Cfserver.daemon == None:
+            Cfserver.daemon = Daemon(Cfserver.cfserverExecutable())
         else:
-            startupinfo = None
-            if os.name == "nt":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            Cfserver.daemon.ensureActive(Cfserver.cfserverExecutable())
+        return Cfserver.daemon
 
-            cmd = Cfserver.get_setting("cfserver_path", "cfserver.exe")
+    @staticmethod
+    def cfserverExecutable():
+        return Cfserver.get_setting("cfserver_path", "cfserver.exe")
 
-            print("Starting " + cmd)
+    @staticmethod
+    def selectModule(filename):
+        daemon = Cfserver.getDaemon()
+        daemon.sendCommand("module \"%s\" %s" % (
+            filename.replace("\\", "\\\\"),
+            "cppmode" if os.path.basename(filename).endswith(".cpp") else "cmode"))
 
-            Cfserver.cfserver = util.popen(cmd)
+    reErrorWithOffsets = re.compile(
+        r'(?P<type>(ERROR|WARN|INFO)) '
+        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) (?P<message>.+)\r?\n')
 
-            if Cfserver.cfserver.stdout:
-                threading.Thread(target=self.read_stdout).start()
+    @staticmethod
+    def analyzeModule(view):
+        print("analyzeMethod called for file %s" % (view.file_name()))
+        daemon = Cfserver.getDaemon()
+        Cfserver.selectModule(view.file_name())
+        idErrors = daemon.getNextUniqueId()
+        daemon.sendCommand("analyze -n %d \"%s\" 0 end"
+            % (idErrors,
+               view.file_name().replace("\\", "\\\\")))
+        errorsWithOffsets = daemon.getErrors(idErrors)
 
-            if Cfserver.cfserver.stderr:
-                threading.Thread(target=self.read_stderr).start()
+        matchErrorsWithOffsets = Cfserver.reErrorWithOffsets.finditer(errorsWithOffsets)
+        allErrors = ''
+        for matchedError in matchErrorsWithOffsets:
+            fromOfs = int(matchedError.group('fromOfs'))
+            (row, col) = view.rowcol(fromOfs)
+            message = matchedError.group('message').replace("\r", "")
+            allErrors += "%s %d %d %s\n" % (matchedError.group('type'),
+                                          row,
+                                          col,
+                                          message)
+        print("post translation allerrors: %s" % allErrors)
+        return allErrors
 
-            print("Started cfserver pid=%d" % (Cfserver.cfserver.pid))
-        self.write_stdin()
 
-
-#        print("cfserver linter %s run cmd=%s, code=%s" % (self, cmd, code))
-        return (
-            r'ERRORS "c:\\Users\\alexander.APRELEV\\IdeaProjects\\untitled\\test.cpp" 0\n'
-            r'ERROR 215 216 27 "\r" "after" ";"\n'
-            r'ERROR 225 227 15 "STRUCT "\n'
-            r'ERROR 253 254 27 "\r" "after" ";"\n'
-            r'ERRORS-END"\n')
+# class CfserverEventListener(sublime_plugin.EventListener):
+#     def on_activated(self, view):
+#         print("CfserverEventListener.on_activated in %s" % (view.file_name()))
+#         is_at_front = (view.window() is not None and view.window().active_view() == view)
+#         if (is_at_front and view.file_name() != None):
+#             Cfserver.selectModule(view.file_name())
