@@ -1,4 +1,4 @@
 {
 	// The path to the cfserver
-	"cfserver_path" : "C:\\Users\\alexander.APRELEV\\Downloads\\CppTools\\CppTools\\lib\\cfserver.exe",
+	"cfserver_path" : "cfserver.exe",
 }

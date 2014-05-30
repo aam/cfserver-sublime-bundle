@@ -23,6 +23,12 @@ import SublimeLinter
 
 # from Default.exec import ProcessListener, AsyncProcess
 
+class Definition:
+    def __init__(self, filename, fromOfs, toOfs):
+        self.filename = filename
+        self.fromOfs = fromOfs
+        self.toOfs = toOfs
+
 class Daemon:
     def __init__(self, cmd):
         self.start(cmd)
@@ -33,13 +39,17 @@ class Daemon:
         self.id += 1
         return self.id
 
-    def getErrors(self, responseId):
+    def waitForErrors(self, responseId):
         nAttempts = 10
         while (not responseId in self.responses and nAttempts>0):
             time.sleep(1)  # sleep 1s econd
             nAttempts -= 1
 
         return self.responses.pop(responseId)
+
+    def waitForUsages(self, typeOfUsage, symbol):
+        print("waitForUsages: %s, %s" % (typeOfUsage, symbol))
+        return [Definition("d:\\espear\\time\\time\\time.cpp", 185, 192)]
 
     reErrors = re.compile(
         r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
@@ -140,6 +150,7 @@ warning -redundant_brackets
 warning +report_multiple_defs
 # option +out_errorcodes
 end-config
+option -deCR_on
 unused
 list-errors
 ''', "ascii"))
@@ -199,6 +210,7 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
 
     def run(self, cmd, code):
         print("cfserver run started in %s" % (sublime.active_window().active_view().file_name()))
+        print("cfserver run against %s" % (code))
         return Cfserver.analyzeModule(sublime.active_window().active_view())
 
 
@@ -234,7 +246,7 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
         daemon.sendCommand("analyze -n %d \"%s\" 0 end"
             % (idErrors,
                view.file_name().replace("\\", "\\\\")))
-        errorsWithOffsets = daemon.getErrors(idErrors)
+        errorsWithOffsets = daemon.waitForErrors(idErrors)
 
         matchErrorsWithOffsets = Cfserver.reErrorWithOffsets.finditer(errorsWithOffsets)
         allErrors = ''
@@ -256,3 +268,67 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
 #         is_at_front = (view.window() is not None and view.window().active_view() == view)
 #         if (is_at_front and view.file_name() != None):
 #             Cfserver.selectModule(view.file_name())
+
+
+def is_supported_language(view):
+    if view.is_scratch() or view.file_name() == None:
+        return False
+    caret = view.sel()[0].a
+    return (view.score_selector(caret, "source.c++ ") +
+            view.score_selector(caret, "source.c ")) > 0
+
+class CfserverGotoBase(sublime_plugin.TextCommand):
+
+    def get_target(self, tu, data, offset, found_callback, folders):
+        pass
+
+    def found_callback(self, target):
+        if target == None:
+            sublime.status_message("Don't know where the %s is!" % self.goto_type)
+        elif not isinstance(target, list):
+            open(self.view, target)
+        else:
+            self.targets = target
+            self.view.window().show_quick_panel(target, self.open_file)
+
+    def open_file(self, idx):
+        if idx >= 0:
+            target = self.targets[idx]
+            if isinstance(target, list):
+                target = target[1]
+            open(self.view, target)
+
+    def run(self, edit):
+        print("CfserverGotoBase %s" % edit)
+        return
+
+
+    def is_enabled(self):
+        return is_supported_language(sublime.active_window().active_view())
+
+    def is_visible(self):
+        return is_supported_language(sublime.active_window().active_view())
+
+
+class CfserverGotoImplementation(CfserverGotoBase):
+    pass
+
+class CfserverGotoDef(CfserverGotoBase):
+    def run(self, edit):
+        view = self.view
+        offset = view.sel()[0].a
+        text = view.word(offset)
+        print("looking for definition of '%s'" % edit)
+
+        daemon = Cfserver.getDaemon()
+        Cfserver.selectModule(view.file_name())
+        idErrors = daemon.getNextUniqueId()
+        daemon.sendCommand("goto-def \"%s\" %d" % (view.file_name().replace("\\", "\\\\"), offset))
+        defs = daemon.waitForUsages("defs", text)
+        if defs == None:
+            sublime.status_message("Don't know where %s is defined." % text)
+            return
+        view.window().open_file(defs[0].filename)
+        view.sel().clear()
+        view.sel().add(sublime.Region(defs[0].fromOfs, defs[0].toOfs))
+        view.show(view.sel())
