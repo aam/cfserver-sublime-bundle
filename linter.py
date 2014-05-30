@@ -49,7 +49,7 @@ class Daemon:
 
     def waitForUsages(self, typeOfUsage, symbol):
         print("waitForUsages: %s, %s" % (typeOfUsage, symbol))
-        return [Definition("d:\\espear\\time\\time\\time.cpp", 185, 192)]
+        return [Definition("d:\\time\\time\\time.cpp", 185, 192)]
 
     reErrors = re.compile(
         r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
