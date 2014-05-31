@@ -17,16 +17,22 @@ You will need to have [Cfserver](http://www.adv-tools.com/) binary for your OS a
 INSTALLATION
 ============
 
-If you are using the [Package Control][1] plugin, installation is very easy.
-Open the command palette (CTRL-SHIFT-P or CMD-SHIFT-P), type 'Install' and
-select 'Package Control: Install Package' from the list. Next, type 'cfserver' and
-select the Cfserver package from the list. 
+Option to install from [Package Control](https://sublime.wbond.net/) is to come yet.
 
 To install this package manually, copy the the contents of this repository to a
 new directory in the Sublime packages directory (on OSX:
 ~/Library/Application Support/Sublime Text 3/Packages).
 
-Add the `cfserver_path` variable to your user settings:
+You can also clone github repository directly into your packages directory:
+
+    aam@mac:~/Library/Application Support/Sublime Text 3/Packages$ git clone https://github.com/aam/cfserver-sublime-bundle.git Cfserver
+    Cloning into 'Cfserver'...
+    remote: Counting objects: 59, done.
+    remote: Compressing objects: 100% (47/47), done.
+    remote: Total 59 (delta 25), reused 42 (delta 9)
+    Unpacking objects: 100% (59/59), done.
+
+Add the `cfserver_path` variable pointing to cfserver to your user settings:
 
     {
         "cfserver_path" : "c:\\Users\\baz\\cfserver.exe",
