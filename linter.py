@@ -208,7 +208,7 @@ list-errors
             return False
 
     def sendCommand(self, command):
-        print("sending %s" % (command))
+        print(">> %s" % (command))
         self.proc.stdin.write(bytes(command + "\n", "ascii"))
         self.proc.stdin.flush()
 
@@ -268,6 +268,10 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
 
         if (restarted):
             Cfserver.daemon.outputCollector.addHandler(ErrorsHandler())
+            Cfserver.daemon.outputCollector.addHandler(Handler("PROGRESS-START", 
+                                                       Cfserver.reportProgressStart))
+            Cfserver.daemon.outputCollector.addHandler(Handler("PROGRESS-END", 
+                                                       Cfserver.reportProgressEnd))
 
         return Cfserver.daemon
 
@@ -284,7 +288,6 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
 
     @staticmethod
     def analyzeModule(view):
-        print("analyzeMethod called for file %s" % (view.file_name()))
         daemon = Cfserver.getDaemon()
         Cfserver.selectModule(view.file_name())
         idErrors = daemon.getNextUniqueId()
@@ -292,12 +295,26 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
             % (idErrors,
                view.file_name().replace("\\", "\\\\")))
 
+    reProgressStart = re.compile(
+        r'PROGRESS-START \"(?P<message>.+)\"',
+        re.MULTILINE)
+
+    @staticmethod
+    def reportProgressStart(message):
+        match = Cfserver.reProgressStart.match(message)
+        if match:
+            sublime.status_message("Cfserver: %s" % (match.group('message')))
+
+    @staticmethod
+    def reportProgressEnd(message):
+        sublime.status_message("")
+
 class ErrorsHandler(Handler):
     def __init__(self):
         super().__init__("ERRORS", self.proc)
 
     reErrors = re.compile(
-        r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
+        r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d+)\r?\n'
         r'(?P<allerrors>((.*)\r?\n)+)'
         r'^ERRORS-END(\r?\n)?',
         re.MULTILINE)
@@ -325,26 +342,33 @@ class ErrorsHandler(Handler):
                 else:
                     regionsWarnings.append(region)
                 cnt+=1
-            print("got %d errors back" % cnt)
             view = sublime.active_window().find_open_file(match.group('filename'))
-            view.add_regions("cfserver_errors", regionsErrors, "sublimelinter.mark.error", "cross", sublime.DRAW_NO_FILL)
-            view.add_regions("cfserver_warnings", regionsWarnings, "sublimelinter.mark.warning", "dot", sublime.DRAW_NO_FILL)
+            view.add_regions(
+                "cfserver_errors",
+                regionsErrors,
+                 "sublimelinter.mark.error",
+                 "dot",
+                 sublime.DRAW_NO_FILL)
+            view.add_regions("cfserver_warnings",
+                regionsWarnings,
+                "sublimelinter.mark.warning",
+                "dot",
+                sublime.DRAW_NO_FILL)
 
 class CfserverEventListener(sublime_plugin.EventListener):
     def on_activated(self, view):
-        print("CfserverEventListener.on_activated in %s" % (view.file_name()))
         if is_supported_language(view) and view.file_name is not None:
-            Cfserver.selectModule(view.file_name())
+            #Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
     def on_load_async(self, view):
         if is_supported_language(view) and view.file_name is not None:
-            Cfserver.selectModule(view.file_name())
+            #Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
     def on_post_save_async(self, view):
         if is_supported_language(view) and view.file_name is not None:
-            Cfserver.selectModule(view.file_name())
+            #Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
 
