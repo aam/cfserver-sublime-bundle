@@ -53,8 +53,9 @@ class OutputCollector:
     def read_stdout(self):
         stdout = self.stdout
         buffers_queue = self.buffers_queue
-        while True:
+        while not stdout.closed:
             data = os.read(stdout.fileno(), OutputCollector.BUF_SIZE)
+            print("read_stdout %s" % (data))
 
             if len(data) > 0:
                 buffers_queue.put(data, block=False, timeout=None)
@@ -237,6 +238,8 @@ class Cfserver():
 
         if (restarted):
             Cfserver.daemon.outputCollector.addHandler(ErrorsHandler())
+            Cfserver.daemon.outputCollector.addHandler(Handler("ERRORS-CLEAR", 
+                                                       Cfserver.clearErrors))
             Cfserver.daemon.outputCollector.addHandler(Handler("PROGRESS-START", 
                                                        Cfserver.reportProgressStart))
             Cfserver.daemon.outputCollector.addHandler(Handler("PROGRESS-END", 
@@ -278,6 +281,17 @@ class Cfserver():
     def reportProgressEnd(message):
         sublime.status_message("")
 
+    REGION_ERRORS = "cfserver_errors"
+    REGION_WARNINGS = "cfserver_warnings"
+
+    @staticmethod
+    def clearErrors(message):
+        # fishy, but there is no indication regarding what file
+        # errors are being cleared for
+        view = sublime.active_window().active_view()
+        view.erase_regions(Cfserver.REGION_ERRORS)
+        view.erase_regions(Cfserver.REGION_WARNINGS)
+
 class ErrorsHandler(Handler):
     def __init__(self):
         super().__init__("ERRORS", self.proc)
@@ -309,6 +323,7 @@ class ErrorsHandler(Handler):
 
     def proc(self, message):
         match = ErrorsHandler.reErrors.match(message)
+        # print("got message '%s' and match is '%s'" % (message, match))
         if match:
             view = sublime.active_window().find_open_file(match.group('filename'))
             if view: # file is still around
@@ -328,17 +343,16 @@ class ErrorsHandler(Handler):
                     else:
                         regionsWarnings.append(region)
                     cnt+=1
-                view.add_regions(
-                    "cfserver_errors",
-                    regionsErrors,
-                    "invalid.deprecated",
-                    ErrorsHandler.getMarkErrorPng(),
-                    sublime.DRAW_NO_FILL)
-                view.add_regions("cfserver_warnings",
-                    regionsWarnings,
-                    "invalid",
-                    ErrorsHandler.getMarkWarningPng(),
-                    sublime.DRAW_NO_FILL)
+                view.add_regions(Cfserver.REGION_ERRORS,
+                                 regionsErrors,
+                                 "invalid.deprecated",
+                                 ErrorsHandler.getMarkErrorPng(),
+                                 sublime.DRAW_NO_FILL)
+                view.add_regions(Cfserver.REGION_WARNINGS,
+                                 regionsWarnings,
+                                 "invalid",
+                                 ErrorsHandler.getMarkWarningPng(),
+                                 sublime.DRAW_NO_FILL)
 
 class CfserverEventListener(sublime_plugin.EventListener):
     def on_activated(self, view):
