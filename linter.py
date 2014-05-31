@@ -208,15 +208,15 @@ list-errors
 
 class Cfserver():
     def get_settings():
-        return sublime.load_settings("SublimeLinter-contrib-cfserver.sublime-settings")
+        return sublime.load_settings("Cfserver.sublime-settings")
 
     def get_setting(key, default=None, view=None):
         try:
             if view == None:
                 view = sublime.active_window().active_view()
             s = view.settings()
-            if s.has("sublimecontribcfserver_%s" % key):
-                return s.get("sublimecontribcfserver_%s" % key)
+            if s.has("cfserver_%s" % key):
+                return s.get("cfserver_%s" % key)
         except:
             pass
         return Cfserver.get_settings().get(key, default)
