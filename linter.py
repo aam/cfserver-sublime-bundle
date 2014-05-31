@@ -2,8 +2,7 @@
 # linter.py
 # Linter for Cfserver C/C++ static code analysis engine
 #
-# Written by aam
-# Copyright (c) 2014 aam
+# Copyright (c) 2014 Alexander Aprelev
 #
 # License: MIT
 #

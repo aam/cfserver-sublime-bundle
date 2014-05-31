@@ -12,21 +12,21 @@
 				"children":
 				[
 					{
-						"caption": "SublimeLinter-contrib-cfserver",
+						"caption": "Cfserver",
 						"children":
 						[
 							{
 								"caption": "Settings – Default",
 								"command": "open_file", "args":
 								{
-									"file": "${packages}/SublimeLinter-contrib-cfserver/SublimeLinter-contrib-cfserver.sublime-settings"
+									"file": "${packages}/Cfserver/Cfserver.sublime-settings"
 								}
 							},
 							{
 								"caption": "Settings – User",
 								"command": "open_file", "args":
 								{
-									"file": "${packages}/User/SublimeLinter-contrib-cfserver.sublime-settings"
+									"file": "${packages}/User/Cfserver.sublime-settings"
 								}
 							},
 						]
