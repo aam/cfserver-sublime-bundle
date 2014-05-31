@@ -2,16 +2,16 @@
     "schema_version": "0.1",
     "packages": [
         {
-            "name": "SublimeLinter-contrib-cfserver",
+            "name": "cfserver-sublime-bundle",
             "description": "Frontend for C/C++ cfserver analyzer",
             "author": "Alexander Aprelev",
-            "homepage": "http://github.com/aam/SublimeLinter-contrib-cfserver",
+            "homepage": "http://github.com/aam/cfserver-sublime-bundle",
             "last_modified": "2014-05-27 00:30:00",
             "platforms": {
                 "*": [
                     {
                         "version": "1.0.41",
-                        "url": "http://github.com/aam/SublimeLinter-contrib-cfserver/SublimeLinter-contrib-cfserver-0.1.sublime-package"
+                        "url": "http://github.com/aam/cfserver-sublime-bundle-dist/cfserver-sublime-bundle-0.1.sublime-package"
                     }
                 ]
             }

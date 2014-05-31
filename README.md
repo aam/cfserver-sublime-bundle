@@ -1,73 +1,56 @@
-SublimeLinter-contrib-cfserver
-================================
+# Cfserver C/C++ bundle for Sublime
+===================================
 
-[![Build Status](https://travis-ci.org/SublimeLinter/SublimeLinter-contrib-cfserver.svg?branch=master)](https://travis-ci.org/SublimeLinter/SublimeLinter-contrib-cfserver)
+This bundle brings C/C++ static analysis capabilities provided by Advanced Tools [Cfserver](http://www.adv-tools.com/) to Sublime Text. The following features are currently provided:
 
-This linter plugin for [SublimeLinter][docs] provides an interface to [cfserver](__linter_homepage__). It will be used with files that have the “__syntax__” syntax.
+* Errors/warnings reported by Cfserver.
 
-## Installation
-SublimeLinter 3 must be installed in order to use this plugin. If SublimeLinter 3 is not installed, please follow the instructions [here][installation].
+Next on the list are:
+* Navigation to definition/usage
+* Code completion
 
-### Linter installation
-Before using this plugin, you must ensure that `cfserver` is installed on your system. To install `cfserver`, do the following:
+PRE-REQ
+=======
 
-1. Install Other.
+You will need to have [Cfserver](http://www.adv-tools.com/) binary for your OS available locally in order to use this plugin. 
 
-1. Install `cfserver` by typing the following in a terminal:
-   ```
-   <package manager> install cfserver
-   ```
+INSTALLATION
+============
 
+If you are using the [Package Control][1] plugin, installation is very easy.
+Open the command palette (CTRL-SHIFT-P or CMD-SHIFT-P), type 'Install' and
+select 'Package Control: Install Package' from the list. Next, type 'cfserver' and
+select the Cfserver package from the list. 
 
-**Note:** This plugin requires `cfserver` __version__ or later.
+To install this package manually, copy the the contents of this repository to a
+new directory in the Sublime packages directory (on OSX:
+~/Library/Application Support/Sublime Text 3/Packages).
 
-### Linter configuration
-In order for `cfserver` to be executed by SublimeLinter, you must ensure that its path is available to SublimeLinter. Before going any further, please read and follow the steps in [“Finding a linter executable”](http://sublimelinter.readthedocs.org/en/latest/troubleshooting.html#finding-a-linter-executable) through “Validating your PATH” in the documentation.
+Add the `cfserver_path` variable to your user settings:
 
-Once you have installed and configured `cfserver`, you can proceed to install the SublimeLinter-contrib-cfserver plugin if it is not yet installed.
+    {
+        "cfserver_path" : "c:\\Users\\baz\\cfserver.exe",
+    }
 
-### Plugin installation
-Please use [Package Control][pc] to install the linter plugin. This will ensure that the plugin will be updated when new versions are available. If you want to install from source so you can modify the source code, you probably know what you are doing so we won’t cover that here.
+LICENSE
+=======
 
-To install via Package Control, do the following:
+Copyright (c) 2014 Alexander Aprelev
 
-1. Within Sublime Text, bring up the [Command Palette][cmd] and type `install`. Among the commands you should see `Package Control: Install Package`. If that command is not highlighted, use the keyboard or mouse to select it. There will be a pause of a few seconds while Package Control fetches the list of available plugins.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. When the plugin list appears, type `cfserver`. Among the entries you should see `SublimeLinter-contrib-cfserver`. If that entry is not highlighted, use the keyboard or mouse to select it.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-## Settings
-For general information on how SublimeLinter works with settings, please see [Settings][settings]. For information on generic linter settings, please see [Linter Settings][linter-settings].
-
-In addition to the standard SublimeLinter settings, SublimeLinter-contrib-cfserver provides its own settings. Those marked as “Inline Setting” or “Inline Override” may also be [used inline][inline-settings].
-
-|Setting|Description|Inline Setting|Inline Override|
-|:------|:----------|:------------:|:-------------:|
-|foo|Something.|&#10003;| |
-|bar|Something else.| |&#10003;|
-
-## Contributing
-If you would like to contribute enhancements or fixes, please do the following:
-
-1. Fork the plugin repository.
-1. Hack on a separate topic branch created from the latest `master`.
-1. Commit and push the topic branch.
-1. Make a pull request.
-1. Be patient.  ;-)
-
-Please note that modications should follow these coding guidelines:
-
-- Indent is 4 spaces.
-- Code should pass flake8 and pep257 linters.
-- Vertical whitespace helps readability, don’t be afraid to use it.
-- Please use descriptive variable names, no abbrevations unless they are very well known.
-
-Thank you for helping out!
-
-[docs]: http://sublimelinter.readthedocs.org
-[installation]: http://sublimelinter.readthedocs.org/en/latest/installation.html
-[locating-executables]: http://sublimelinter.readthedocs.org/en/latest/usage.html#how-linter-executables-are-located
-[pc]: https://sublime.wbond.net/installation
-[cmd]: http://docs.sublimetext.info/en/sublime-text-3/extensibility/command_palette.html
-[settings]: http://sublimelinter.readthedocs.org/en/latest/settings.html
-[linter-settings]: http://sublimelinter.readthedocs.org/en/latest/linter_settings.html
-[inline-settings]: http://sublimelinter.readthedocs.org/en/latest/settings.html#inline-settings
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
