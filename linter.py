@@ -1,9 +1,9 @@
 #
 # linter.py
-# Linter for SublimeLinter3, a code checking framework for Sublime Text 3
+# Linter for Cfserver C/C++ static code analysis engine
 #
-# Written by alexander
-# Copyright (c) 2014 alexander
+# Written by aam
+# Copyright (c) 2014 aam
 #
 # License: MIT
 #
@@ -19,11 +19,6 @@ import queue
 
 import sublime
 import sublime_plugin
-
-import SublimeLinter
-import SublimeLinter.lint.highlight
-
-# from Default.exec import ProcessListener, AsyncProcess
 
 class Definition:
     def __init__(self, filename, fromOfs, toOfs):
@@ -43,7 +38,6 @@ class OutputCollector:
     def __init__(self, stdout):
         self.stdout = stdout
 
-#        self.errors = {}
         self.handlers = []
 
         self.buffers_queue = queue.Queue()
@@ -56,11 +50,12 @@ class OutputCollector:
         self.parserThread = threading.Thread(target=self.parse)
         self.parserThread.start()
 
+    BUF_SIZE = 32767
     def read_stdout(self):
         stdout = self.stdout
         buffers_queue = self.buffers_queue
         while True:
-            data = os.read(stdout.fileno(), 2**15)
+            data = os.read(stdout.fileno(), OutputCollector.BUF_SIZE)
 
             if len(data) > 0:
                 buffers_queue.put(data, block=False, timeout=None)
@@ -81,13 +76,13 @@ class OutputCollector:
             if (cr != -1):
                 # got full line
                 s = fulls[:cr]
-                if s.endswith('\r'):
+                if s.endswith('\r'): # remove LF from Windows CR/LF
                     s = s[:-1];
                 fulls = fulls[cr+1:] # skip over CR
                 self.fulls = fulls
                 return s
 
-            # wait for next line
+            # Now have to wait for next line
             try:
                 data = self.buffers_queue.get(block=True, timeout=OutputCollector.MAX_WAIT)
                 fulls += data.decode(encoding="ASCII")
@@ -108,7 +103,7 @@ class OutputCollector:
                 return ''.join(strings)
 
     def parseSingleResponse(self, line):
-        if line == "": return
+        if line is None or line == "": return
         command = OutputCollector.firstWord(line)
 
         buffer = "%s\n%s\n" % (line, self.readUntil(command + "-END"))
@@ -212,32 +207,7 @@ list-errors
         self.proc.stdin.write(bytes(command + "\n", "ascii"))
         self.proc.stdin.flush()
 
-class Cfserver(SublimeLinter.sublimelinter.Linter):
-
-    """Provides an interface to cfserver."""
-
-    syntax = 'c\+\+'
-    cmd = None
-    executable = None
-    version_args = '--version'
-    version_re = r'(?P<version>\d+\.\d+\.\d+)'
-    version_requirement = '>= 1.0'
-
-    regex = r'(?:(?P<error>ERROR)|(?P<warning>WARN)|(?P<info>INFO)) (?P<line>\d+) (?P<col>\d+) (?P<message>.+)'
-    multiline = True
-    line_col_base = (0, 0)
-    tempfile_suffix = None
-    error_stream = None
-    selectors = {}
-    word_re = None
-    defaults = {}
-    inline_settings = None
-    inline_overrides = None
-    comment_re = None
-
-    def __init__(self, view, syntax):
-        SublimeLinter.sublimelinter.Linter.__init__(self, view, syntax)
-
+class Cfserver():
     def get_settings():
         return sublime.load_settings("SublimeLinter-contrib-cfserver.sublime-settings")
 
@@ -323,37 +293,53 @@ class ErrorsHandler(Handler):
         r'(?P<type>(ERROR|WARN|INFO)) '
         r'(?P<fromOfs>\d+) (?P<toOfs>\d+) (?P<message>.+)\r?\n')
 
+
+    mark_error_png = None
+    @staticmethod
+    def getMarkErrorPng():
+        if ErrorsHandler.mark_error_png == None:
+            ErrorsHandler.mark_error_png = sublime.find_resources("cfserver-mark-error.png")[0]
+        return ErrorsHandler.mark_error_png
+
+    mark_warning_png = None    
+    @staticmethod
+    def getMarkWarningPng():
+        if ErrorsHandler.mark_warning_png == None:
+            ErrorsHandler.mark_warning_png = sublime.find_resources("cfserver-mark-warning.png")[0]
+        return ErrorsHandler.mark_warning_png
+
     def proc(self, message):
         match = ErrorsHandler.reErrors.match(message)
         if match:
-            matchErrorsWithOffsets = ErrorsHandler.reErrorWithOffsets.finditer(match.group('allerrors'))
-            regionsErrors = []
-            regionsWarnings = []
-            cnt = 0
-            for matchedError in matchErrorsWithOffsets:
-                fromOfs = int(matchedError.group('fromOfs'))
-                toOfs = int(matchedError.group('toOfs'))
-                message = matchedError.group('message').replace("\r", "")
-                error_type = matchedError.group('type');
-
-                region = sublime.Region(fromOfs, toOfs)
-                if (error_type == 'ERROR'):
-                    regionsErrors.append(region)
-                else:
-                    regionsWarnings.append(region)
-                cnt+=1
             view = sublime.active_window().find_open_file(match.group('filename'))
-            view.add_regions(
-                "cfserver_errors",
-                regionsErrors,
-                 "sublimelinter.mark.error",
-                 "dot",
-                 sublime.DRAW_NO_FILL)
-            view.add_regions("cfserver_warnings",
-                regionsWarnings,
-                "sublimelinter.mark.warning",
-                "dot",
-                sublime.DRAW_NO_FILL)
+            if view: # file is still around
+                matchErrorsWithOffsets = ErrorsHandler.reErrorWithOffsets.finditer(match.group('allerrors'))
+                regionsErrors = []
+                regionsWarnings = []
+                cnt = 0
+                for matchedError in matchErrorsWithOffsets:
+                    fromOfs = int(matchedError.group('fromOfs'))
+                    toOfs = int(matchedError.group('toOfs'))
+                    message = matchedError.group('message').replace("\r", "")
+                    error_type = matchedError.group('type');
+
+                    region = sublime.Region(fromOfs, toOfs)
+                    if (error_type == 'ERROR'):
+                        regionsErrors.append(region)
+                    else:
+                        regionsWarnings.append(region)
+                    cnt+=1
+                view.add_regions(
+                    "cfserver_errors",
+                    regionsErrors,
+                    "invalid.deprecated",
+                    ErrorsHandler.getMarkErrorPng(),
+                    sublime.DRAW_NO_FILL)
+                view.add_regions("cfserver_warnings",
+                    regionsWarnings,
+                    "invalid",
+                    ErrorsHandler.getMarkWarningPng(),
+                    sublime.DRAW_NO_FILL)
 
 class CfserverEventListener(sublime_plugin.EventListener):
     def on_activated(self, view):
@@ -371,6 +357,11 @@ class CfserverEventListener(sublime_plugin.EventListener):
             #Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
+    def on_query_completions(self, view, prefix, locations):
+        if is_supported_language(view) and view.file_name is not None:
+            print("on_query_completions: in %s with %s at %s " %
+                (view, prefix, locations))
+            return [("Try this " + prefix, "sugs")]
 
 def is_supported_language(view):
     if view.is_scratch() or view.file_name() == None:
