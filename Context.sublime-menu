@@ -1,5 +1,5 @@
 [
-    { "caption": "-", "id": "sublimelintercontribcfserver" },
+    { "caption": "-", "id": "cfserver" },
     { "command": "cfserver_goto_def", "caption": "Go to Definition" },
     { "command": "cfserver_goto_implementation", "caption": "Go to Implementation" },
 ]
