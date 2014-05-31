@@ -15,11 +15,13 @@ import os
 import threading
 import re
 import time
+import queue
 
 import sublime
 import sublime_plugin
 
 import SublimeLinter
+import SublimeLinter.lint.highlight
 
 # from Default.exec import ProcessListener, AsyncProcess
 
@@ -28,6 +30,97 @@ class Definition:
         self.filename = filename
         self.fromOfs = fromOfs
         self.toOfs = toOfs
+
+class Handler:
+    def __init__(self, type, proc):
+        self.type = type
+        self.proc = proc
+
+    def isMatch(self, type):
+        return type == self.type
+
+class OutputCollector:
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+#        self.errors = {}
+        self.handlers = []
+
+        self.buffers_queue = queue.Queue()
+        self.fulls = ""
+
+        self.isParserStayingAlive = True
+
+        self.readerThread = threading.Thread(target=self.read_stdout)
+        self.readerThread.start()
+        self.parserThread = threading.Thread(target=self.parse)
+        self.parserThread.start()
+
+    def read_stdout(self):
+        stdout = self.stdout
+        buffers_queue = self.buffers_queue
+        while True:
+            data = os.read(stdout.fileno(), 2**15)
+
+            if len(data) > 0:
+                buffers_queue.put(data, block=False, timeout=None)
+            else:
+                stdout.close()
+                self.isParserStayingAlive = False
+                break
+
+    def parse(self):
+        while self.isParserStayingAlive:
+            self.parseSingleResponse(self.readLine())
+
+    MAX_WAIT = 5 # seconds, before we wake up and check whether we have to exit
+    def readLine(self):
+        fulls = self.fulls
+        while self.isParserStayingAlive:
+            cr = fulls.find("\n")
+            if (cr != -1):
+                # got full line
+                s = fulls[:cr]
+                if s.endswith('\r'):
+                    s = s[:-1];
+                fulls = fulls[cr+1:] # skip over CR
+                self.fulls = fulls
+                return s
+
+            # wait for next line
+            try:
+                data = self.buffers_queue.get(block=True, timeout=OutputCollector.MAX_WAIT)
+                fulls += data.decode(encoding="ASCII")
+            except queue.Empty:
+                pass
+
+    @staticmethod
+    def firstWord(line):
+        ndxSpace = line.find(" ")
+        return line[:ndxSpace] if ndxSpace != -1 else line
+
+    def readUntil(self, endCommand):
+        strings = []
+        while True:
+            newline = self.readLine()
+            strings.append(newline + "\n")
+            if OutputCollector.firstWord(newline) == endCommand:
+                return ''.join(strings)
+
+    def parseSingleResponse(self, line):
+        if line == "": return
+        command = OutputCollector.firstWord(line)
+
+        buffer = "%s\n%s\n" % (line, self.readUntil(command + "-END"))
+        for handler in self.handlers:
+            if handler.isMatch(command):
+                handler.proc(buffer)
+
+    def addHandler(self, handler):
+        self.handlers.append(handler)
+
+    def removeHandler(self, handler):
+        self.handlers.remove(handler)
 
 class Daemon:
     def __init__(self, cmd):
@@ -38,55 +131,6 @@ class Daemon:
     def getNextUniqueId(self):
         self.id += 1
         return self.id
-
-    def waitForErrors(self, responseId):
-        nAttempts = 10
-        while (not responseId in self.responses and nAttempts>0):
-            time.sleep(1)  # sleep 1s econd
-            nAttempts -= 1
-
-        return self.responses.pop(responseId)
-
-    def waitForUsages(self, typeOfUsage, symbol):
-        print("waitForUsages: %s, %s" % (typeOfUsage, symbol))
-        return [Definition("d:\\time\\time\\time.cpp", 185, 192)]
-
-    reErrors = re.compile(
-        r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
-        r'(?P<allerrors>((.*)\r?\n)+)'
-        r'^ERRORS-END\r?\n',
-        re.MULTILINE)
-
-    def on_data(self, data):
-        s = data.decode(encoding="ASCII")
-        print("on_data: s=%s" % (s))
-        match = Daemon.reErrors.match(s)
-        if match:
-            self.responses[int(match.group('id'))] = match.group('allerrors')
-
-    def on_finished(self):
-       print("on_finished")
-
-    def read_stdout(self):
-        while True:
-            data = os.read(self.proc.stdout.fileno(), 2**15)
-
-            if len(data) > 0:
-                self.on_data(data)
-            else:
-                self.proc.stdout.close()
-                self.on_finished()
-                break
-
-    def read_stderr(self):
-        while True:
-            data = os.read(self.proc.stderr.fileno(), 2**15)
-
-            if len(data) > 0:
-                self.on_data(data)
-            else:
-                self.proc.stderr.close()
-                break
 
     def start(self, cmd):
         startupinfo = None
@@ -101,11 +145,10 @@ class Daemon:
             ],
             stdin = subprocess.PIPE,
             stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
+            stderr = None,
             startupinfo=startupinfo)
 
-        threading.Thread(target=self.read_stdout).start()
-        threading.Thread(target=self.read_stderr).start()
+        self.outputCollector = OutputCollector(self.proc.stdout)
 
         print("Started cfserver proc pid=%d" % (self.proc.pid))
 
@@ -156,10 +199,13 @@ list-errors
 ''', "ascii"))
 
 
-    def ensureActive(self, cmd):
+    def restartIfInactive(self, cmd):
         # if process was never started or if it exited, then restart
         if (self.proc == None or self.proc.poll() != None):
             self.start(cmd)
+            return True
+        else:
+            return False
 
     def sendCommand(self, command):
         print("sending %s" % (command))
@@ -170,7 +216,7 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
 
     """Provides an interface to cfserver."""
 
-    syntax = ('c++')
+    syntax = 'c\+\+'
     cmd = None
     executable = None
     version_args = '--version'
@@ -209,17 +255,20 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
     daemon = None
 
     def run(self, cmd, code):
-        print("cfserver run started in %s" % (sublime.active_window().active_view().file_name()))
-        print("cfserver run against %s" % (code))
-        return Cfserver.analyzeModule(sublime.active_window().active_view())
-
+        pass
 
     @staticmethod
     def getDaemon():
+        restarted = False
         if Cfserver.daemon == None:
             Cfserver.daemon = Daemon(Cfserver.cfserverExecutable())
+            restarted = True
         else:
-            Cfserver.daemon.ensureActive(Cfserver.cfserverExecutable())
+            restarted = Cfserver.daemon.restartIfInactive(Cfserver.cfserverExecutable())
+
+        if (restarted):
+            Cfserver.daemon.outputCollector.addHandler(ErrorsHandler())
+
         return Cfserver.daemon
 
     @staticmethod
@@ -233,10 +282,6 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
             filename.replace("\\", "\\\\"),
             "cppmode" if os.path.basename(filename).endswith(".cpp") else "cmode"))
 
-    reErrorWithOffsets = re.compile(
-        r'(?P<type>(ERROR|WARN|INFO)) '
-        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) (?P<message>.+)\r?\n')
-
     @staticmethod
     def analyzeModule(view):
         print("analyzeMethod called for file %s" % (view.file_name()))
@@ -246,28 +291,61 @@ class Cfserver(SublimeLinter.sublimelinter.Linter):
         daemon.sendCommand("analyze -n %d \"%s\" 0 end"
             % (idErrors,
                view.file_name().replace("\\", "\\\\")))
-        errorsWithOffsets = daemon.waitForErrors(idErrors)
 
-        matchErrorsWithOffsets = Cfserver.reErrorWithOffsets.finditer(errorsWithOffsets)
-        allErrors = ''
-        for matchedError in matchErrorsWithOffsets:
-            fromOfs = int(matchedError.group('fromOfs'))
-            (row, col) = view.rowcol(fromOfs)
-            message = matchedError.group('message').replace("\r", "")
-            allErrors += "%s %d %d %s\n" % (matchedError.group('type'),
-                                          row,
-                                          col,
-                                          message)
-        print("post translation allerrors: %s" % allErrors)
-        return allErrors
+class ErrorsHandler(Handler):
+    def __init__(self):
+        super().__init__("ERRORS", self.proc)
 
+    reErrors = re.compile(
+        r'((.*)(\r?\n))*^ERRORS \"(?P<filename>.+)\"\s(?P<id>\d)\r?\n'
+        r'(?P<allerrors>((.*)\r?\n)+)'
+        r'^ERRORS-END(\r?\n)?',
+        re.MULTILINE)
 
-# class CfserverEventListener(sublime_plugin.EventListener):
-#     def on_activated(self, view):
-#         print("CfserverEventListener.on_activated in %s" % (view.file_name()))
-#         is_at_front = (view.window() is not None and view.window().active_view() == view)
-#         if (is_at_front and view.file_name() != None):
-#             Cfserver.selectModule(view.file_name())
+    reErrorWithOffsets = re.compile(
+        r'(?P<type>(ERROR|WARN|INFO)) '
+        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) (?P<message>.+)\r?\n')
+
+    def proc(self, message):
+        match = ErrorsHandler.reErrors.match(message)
+        if match:
+            matchErrorsWithOffsets = ErrorsHandler.reErrorWithOffsets.finditer(match.group('allerrors'))
+            regionsErrors = []
+            regionsWarnings = []
+            cnt = 0
+            for matchedError in matchErrorsWithOffsets:
+                fromOfs = int(matchedError.group('fromOfs'))
+                toOfs = int(matchedError.group('toOfs'))
+                message = matchedError.group('message').replace("\r", "")
+                error_type = matchedError.group('type');
+
+                region = sublime.Region(fromOfs, toOfs)
+                if (error_type == 'ERROR'):
+                    regionsErrors.append(region)
+                else:
+                    regionsWarnings.append(region)
+                cnt+=1
+            print("got %d errors back" % cnt)
+            view = sublime.active_window().find_open_file(match.group('filename'))
+            view.add_regions("cfserver_errors", regionsErrors, "sublimelinter.mark.error", "cross", sublime.DRAW_NO_FILL)
+            view.add_regions("cfserver_warnings", regionsWarnings, "sublimelinter.mark.warning", "dot", sublime.DRAW_NO_FILL)
+
+class CfserverEventListener(sublime_plugin.EventListener):
+    def on_activated(self, view):
+        print("CfserverEventListener.on_activated in %s" % (view.file_name()))
+        if is_supported_language(view) and view.file_name is not None:
+            Cfserver.selectModule(view.file_name())
+            Cfserver.analyzeModule(view)
+
+    def on_load_async(self, view):
+        if is_supported_language(view) and view.file_name is not None:
+            Cfserver.selectModule(view.file_name())
+            Cfserver.analyzeModule(view)
+
+    def on_post_save_async(self, view):
+        if is_supported_language(view) and view.file_name is not None:
+            Cfserver.selectModule(view.file_name())
+            Cfserver.analyzeModule(view)
 
 
 def is_supported_language(view):
