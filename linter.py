@@ -553,23 +553,73 @@ class CfserverGotoImplementation(CfserverGotoBase):
 
 class CfserverGotoDef(CfserverGotoBase):
 
+    """ Support navigation to definitions."""
+
     def run(self, edit):
+        """ Send goto-def request to Cfserver."""
         view = self.view
         offset = view.sel()[0].a
-        text = view.word(offset)
+        #  text = view.word(offset)
         print("looking for definition of '%s'" % edit)
 
         daemon = Cfserver.getDaemon()
-        Cfserver.selectModule(view.file_name())
+        Cfserver.registerFileIfNotLoaded(view.file_name())
+
+        Cfserver.daemon.outputCollector.addHandler(UsagesHandler())
+
         daemon.sendCommand(
             "goto-def \"%s\" %d" % (
                 view.file_name().replace("\\", "\\\\"), offset))
-        defs = daemon.waitForUsages("defs", text)
-        if defs is None:
-            sublime.status_message(
-                "Don't know where %s is defined." % text)
+
+    def handleUsages(self, message):
+        """ Handle USAGE defs Cfserver response."""
+        print("navigateToDef: %s" % (message))
+
+        # USAGES defs "Class"
+        # decl "c:\\Users\\alexander.APRELEV\\Documents\\test.cpp" 26 31 "class Class {" 2 6 11 "test.cpp" 20 33 norecursive
+        # USAGES-END
+
+
+class UsagesHandler(Handler):
+
+    """ Handler for USAGES Cfserver response."""
+
+    def __init__(self):
+        """ Initialize handler."""
+        super().__init__("USAGES", self.proc)
+
+    reUsages = re.compile(
+        r'((.*)(\r?\n))*^USAGES (?P<type>.+) \"(?P<name>.+)\"\r?\n'
+        r'(?P<allusages>((.+)\r?\n)+)'
+        r'^USAGES-END(\r?\n)?',
+        re.MULTILINE)
+
+    reUsage = re.compile(
+        r'^(?P<type>.+) '
+        r'\"(?P<filename>.+)\" '
+        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) .+\r?\n')
+
+    def proc(self, message):
+        """ Parse and process usages reported by Cfserver."""
+        match = UsagesHandler.reUsages.match(message)
+        print("got message '%s' and match is '%s'" % (message, match))
+        if match is None:
             return
-        view.window().open_file(defs[0].filename)
-        view.sel().clear()
-        view.sel().add(sublime.Region(defs[0].fromOfs, defs[0].toOfs))
-        view.show(view.sel())
+
+        matchUsage = UsagesHandler.reUsage.finditer(match.group('allusages'))
+        if matchUsage is None:
+            return
+
+        for matchedUsage in matchUsage:
+            filename = matchedUsage.group('filename')
+            view = sublime.active_window().open_file(filename,
+                                                     sublime.TRANSIENT)
+            if view:
+                filename = view.file_name()
+                fromOfs = int(matchedUsage.group('fromOfs'))
+                toOfs = int(matchedUsage.group('toOfs'))
+
+                view.sel().clear()
+                view.sel().add(sublime.Region(fromOfs, toOfs))
+                view.show(view.sel())
+        print("that's all folks")
