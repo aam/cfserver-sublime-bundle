@@ -158,9 +158,9 @@ class Daemon:
 
     """ Class responsible for starting/stopping Cfserver executable."""
 
-    def __init__(self, cmd):
+    def __init__(self, cmd, in_log, out_log):
         """ Initialize new Daemon."""
-        self.start(cmd)
+        self.start(cmd, in_log, out_log)
         self.id = 0
         self.responses = {}
         self.registeredFiles = set()
@@ -170,7 +170,7 @@ class Daemon:
         self.id += 1
         return self.id
 
-    def start(self, cmd):
+    def start(self, cmd, in_log, out_log):
         """ Start new Cfserver executable."""
         startupinfo = None
         if os.name == "nt":
@@ -179,8 +179,14 @@ class Daemon:
 
         print("Starting " + cmd)
 
+        command_line = [cmd, '--codeblocks', '--disable-cancel']
+        if in_log is not None and in_log != '':
+            command_line.append(['--inLogName', in_log])
+        if out_log is not None and out_log != '':
+            command_line.append(['--outLogName', out_log])
+
         self.proc = subprocess.Popen(
-            [cmd, '--codeblocks', '--disable-cancel', '--inLogName', '/home/alexander/Downloads/Cfserver.20040531/linux-bin/in', '--outLogName', '/home/alexander/Downloads/Cfserver.20040531/linux-bin/out'],
+            command_line,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=None,
@@ -248,7 +254,10 @@ class Cfserver():
         """ Retrieve existing daemon or creates new one."""
         restarted = False
         if Cfserver.daemon is None:
-            Cfserver.daemon = Daemon(Cfserver.cfserverExecutable())
+            Cfserver.daemon = Daemon(
+                Cfserver.cfserverExecutable(),
+                Cfserver.cfserverInLog(),
+                Cfserver.cfserverOutLog())
             restarted = True
         else:
             restarted = Cfserver.daemon.restartIfInactive(
@@ -267,8 +276,18 @@ class Cfserver():
 
     @staticmethod
     def cfserverExecutable():
-        """ Retrive cfserver executable name from settings."""
+        """ Retrieve cfserver executable name from settings."""
         return Cfserver.get_setting("cfserver_path", "cfserver.exe")
+
+    @staticmethod
+    def cfserverInLog():
+        """ Retrieve location for cfserver in log from settings."""
+        return Cfserver.get_setting("cfserver_inlog", "in")
+
+    @staticmethod
+    def cfserverOutLog():
+        """ Retrieve location for cfserver out log from settings."""
+        return Cfserver.get_setting("cfserver_outlog", "out")
 
     @staticmethod
     def selectModule(filename):

@@ -1,4 +1,6 @@
 {
 	// The path to the cfserver
 	"cfserver_path" : "cfserver.exe",
+	"cfserver_inlog" : "",
+	"cfserver_outlog" : ""
 }
