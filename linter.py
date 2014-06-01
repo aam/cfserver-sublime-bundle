@@ -227,6 +227,7 @@ end-config
     def registerFile(self, filename):
         self.registeredFiles.add(filename)
 
+
 class Cfserver():
 
     """ Basic Sublime plugin functionality."""
@@ -296,19 +297,23 @@ class Cfserver():
         if (not daemon.isFileRegistered(filename)):
             daemon.registerFile(filename)
             daemon.sendCommand("module \"%s\" %s" % (
-                    filename.replace("\\", "\\\\"),
-                    "cppmode" if os.path.basename(filename).endswith(".cpp")
-                    else "cmode"))
+                filename.replace("\\", "\\\\"),
+                "cppmode" if os.path.basename(filename).endswith(".cpp")
+                else "cmode"))
+            return True
+        else:
+            return False
 
     @staticmethod
     def analyzeModule(view):
         """ Issue Cfserver command to analyze file in given view."""
         daemon = Cfserver.getDaemon()
-        Cfserver.selectModule(view.file_name())
+        filename = view.file_name().replace("\\", "\\\\")
+        if Cfserver.selectModule(view.file_name()):
+            daemon.sendCommand("reload \"%s\"" % (filename))
         idErrors = daemon.getNextUniqueId()
         daemon.sendCommand(
-            "analyze -n %d \"%s\" 0 end"
-            % (idErrors, view.file_name().replace("\\", "\\\\")))
+            "analyze -n %d \"%s\" 0 end" % (idErrors, filename))
 
     reProgressStart = re.compile(
         r'PROGRESS-START \"(?P<message>.+)\"',
