@@ -14,6 +14,7 @@ import os
 import threading
 import re
 import queue
+import bisect
 
 import sublime
 import sublime_plugin
@@ -222,9 +223,11 @@ end-config
         self.proc.stdin.flush()
 
     def isFileRegistered(self, filename):
+        """ Check whether we have registered this file already."""
         return filename in self.registeredFiles
 
     def registerFile(self, filename):
+        """ Register new file with Cfserver."""
         self.registeredFiles.add(filename)
 
 
@@ -291,8 +294,8 @@ class Cfserver():
         return Cfserver.get_setting("cfserver_outlog", "out")
 
     @staticmethod
-    def selectModule(filename):
-        """ Issue Cfserver command to select particular file."""
+    def registerFileIfNotLoaded(filename):
+        """ Ask Cfserver to load the  file if see it for the first time."""
         daemon = Cfserver.getDaemon()
         if (not daemon.isFileRegistered(filename)):
             daemon.registerFile(filename)
@@ -309,7 +312,7 @@ class Cfserver():
         """ Issue Cfserver command to analyze file in given view."""
         daemon = Cfserver.getDaemon()
         filename = view.file_name().replace("\\", "\\\\")
-        if Cfserver.selectModule(view.file_name()):
+        if not Cfserver.registerFileIfNotLoaded(view.file_name()):
             daemon.sendCommand("reload \"%s\"" % (filename))
         idErrors = daemon.getNextUniqueId()
         daemon.sendCommand(
@@ -331,6 +334,8 @@ class Cfserver():
         """ Handle PROGRESS-END Cfserver response."""
         sublime.status_message("")
 
+    errorsInFile = {}  # Selection of errors in particular file.
+
     REGION_ERRORS = "cfserver_errors"
     REGION_WARNINGS = "cfserver_warnings"
 
@@ -342,6 +347,19 @@ class Cfserver():
         view = sublime.active_window().active_view()
         view.erase_regions(Cfserver.REGION_ERRORS)
         view.erase_regions(Cfserver.REGION_WARNINGS)
+        Cfserver.errorsInFile = {}
+
+
+class ErrorsInFile:
+
+    """ Holder of all errors/warnings in particular file."""
+
+    def __init__(self,
+                 regionsLeftBoundaries=None,
+                 messages=None):
+        """ Initialize holder."""
+        self.regionsLeftBoundaries = regionsLeftBoundaries
+        self.messages = messages
 
 
 class ErrorsHandler(Handler):
@@ -391,12 +409,13 @@ class ErrorsHandler(Handler):
             view = sublime.active_window().find_open_file(
                 match.group('filename'))
             if view:  # file is still around
+                filename = view.file_name()
                 matchErrorsWithOffsets = (
                     ErrorsHandler.reErrorWithOffsets.finditer(
                         match.group('allerrors')))
                 regionsErrors = []
                 regionsWarnings = []
-                cnt = 0
+                messages = {}
                 for matchedError in matchErrorsWithOffsets:
                     fromOfs = int(matchedError.group('fromOfs'))
                     toOfs = int(matchedError.group('toOfs'))
@@ -408,7 +427,13 @@ class ErrorsHandler(Handler):
                         regionsErrors.append(region)
                     else:
                         regionsWarnings.append(region)
-                    cnt += 1
+                    if fromOfs not in messages:
+                        messages[fromOfs] = []
+                    messages[fromOfs].append((toOfs, message))
+
+                for message in messages.values():
+                    message.sort(key=lambda r: r[0])
+
                 view.add_regions(Cfserver.REGION_ERRORS,
                                  regionsErrors,
                                  "invalid.deprecated",
@@ -419,6 +444,11 @@ class ErrorsHandler(Handler):
                                  "invalid",
                                  ErrorsHandler.getMarkWarningPng(),
                                  sublime.DRAW_NO_FILL)
+                Cfserver.errorsInFile[filename] = ErrorsInFile(
+                    regionsLeftBoundaries=sorted(
+                        list(r.a for r in regionsErrors) +
+                        list(r.a for r in regionsWarnings)),
+                    messages=messages)
 
 
 class CfserverEventListener(sublime_plugin.EventListener):
@@ -427,19 +457,19 @@ class CfserverEventListener(sublime_plugin.EventListener):
 
     def on_activated(self, view):
         """ Handle on_activated event."""
-        if is_supported_language(view) and view.file_name is not None:
+        if is_supported_language(view) and view.file_name() is not None:
             # Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
     def on_load_async(self, view):
         """ Handle on_load_async event."""
-        if is_supported_language(view) and view.file_name is not None:
+        if is_supported_language(view) and view.file_name() is not None:
             # Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
     def on_post_save_async(self, view):
         """ Handle on_post_save_async event."""
-        if is_supported_language(view) and view.file_name is not None:
+        if is_supported_language(view) and view.file_name() is not None:
             # Cfserver.selectModule(view.file_name())
             Cfserver.analyzeModule(view)
 
@@ -449,6 +479,28 @@ class CfserverEventListener(sublime_plugin.EventListener):
             print("on_query_completions: in %s with %s at %s " %
                   (view, prefix, locations))
             return [("Try this " + prefix, "sugs")]
+
+    def on_selection_modified_async(self, view):
+        """Handle selection changes (cursor moves or text selected)."""
+        filename = view.file_name()
+        if is_supported_language(view) and filename is not None:
+            if (filename in Cfserver.errorsInFile):
+                selection = view.sel()[0]
+                errors = Cfserver.errorsInFile[filename]
+                rightmostLower = bisect.bisect_left(
+                    errors.regionsLeftBoundaries, selection.a)
+                if rightmostLower:
+                    rightmostLowerMessages = (
+                        errors.messages[
+                            errors.regionsLeftBoundaries[rightmostLower - 1]])
+                    messages = []
+                    for m in rightmostLowerMessages:
+                        if m[0] < selection.a:
+                            continue
+                        messages.append(m[1])
+                    view.set_status("cfserver_errors", ",".join(messages))
+                    return
+        view.erase_status("cfserver_errors")
 
 
 def is_supported_language(view):
@@ -500,6 +552,7 @@ class CfserverGotoImplementation(CfserverGotoBase):
 
 
 class CfserverGotoDef(CfserverGotoBase):
+
     def run(self, edit):
         view = self.view
         offset = view.sel()[0].a
