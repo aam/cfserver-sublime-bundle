@@ -163,6 +163,7 @@ class Daemon:
         self.start(cmd)
         self.id = 0
         self.responses = {}
+        self.registeredFiles = set()
 
     def getNextUniqueId(self):
         """ Generate unique id to be used for new Cfserver request."""
@@ -179,7 +180,7 @@ class Daemon:
         print("Starting " + cmd)
 
         self.proc = subprocess.Popen(
-            [cmd, '--codeblocks', '--disable-cancel'],
+            [cmd, '--codeblocks', '--disable-cancel', '--inLogName', '/home/alexander/Downloads/Cfserver.20040531/linux-bin/in', '--outLogName', '/home/alexander/Downloads/Cfserver.20040531/linux-bin/out'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=None,
@@ -190,48 +191,13 @@ class Daemon:
         print("Started cfserver proc pid=%d" % (self.proc.pid))
 
         self.proc.stdin.write(bytes(
-            r'''# source "C:\\Users\\abc\\Downloads\\CppTools\\CppTools\\lib\\profile.tcl"
+            r'''#
 begin-config cmode
-gcc -c "gcc"
-# #user-source-root "C:/Users/alexander.APRELEV/IdeaProjects/untitled"
-define WIN32 "1"
-define NDEBUG "1"
-define _WINDOWS "1"
-define _MBCS "1"
-define _AFXDLL "1"
-define _WIN32 "1"
-warning -implicit_cast_to_bool
-warning +name_never_referenced
-warning -name_used_only_once
-warning +redundant_cast
-warning +redundant_qualifier
-warning +static_call_from_value
-warning -redundant_brackets
-warning +report_multiple_defs
-# option +out_errorcodes
+gcc
 end-config
 begin-config cppmode
-g++ -c "g++"
-# #user-source-root "C:/Users/alexander.APRELEV/IdeaProjects/untitled"
-define WIN32 "1"
-define NDEBUG "1"
-define _WINDOWS "1"
-define _MBCS "1"
-define _AFXDLL "1"
-define _WIN32 "1"
-warning -implicit_cast_to_bool
-warning +name_never_referenced
-warning -name_used_only_once
-warning +redundant_cast
-warning +redundant_qualifier
-warning +static_call_from_value
-warning -redundant_brackets
-warning +report_multiple_defs
-# option +out_errorcodes
+g++
 end-config
-option -deCR_on
-unused
-list-errors
 ''', "ascii"))
 
     def restartIfInactive(self, cmd):
@@ -249,6 +215,11 @@ list-errors
         self.proc.stdin.write(bytes(command + "\n", "ascii"))
         self.proc.stdin.flush()
 
+    def isFileRegistered(self, filename):
+        return filename in self.registeredFiles
+
+    def registerFile(self, filename):
+        self.registeredFiles.add(filename)
 
 class Cfserver():
 
@@ -303,10 +274,12 @@ class Cfserver():
     def selectModule(filename):
         """ Issue Cfserver command to select particular file."""
         daemon = Cfserver.getDaemon()
-        daemon.sendCommand("module \"%s\" %s" % (
-            filename.replace("\\", "\\\\"),
-            "cppmode" if os.path.basename(filename).endswith(".cpp")
-            else "cmode"))
+        if (not daemon.isFileRegistered(filename)):
+            daemon.registerFile(filename)
+            daemon.sendCommand("module \"%s\" %s" % (
+                    filename.replace("\\", "\\\\"),
+                    "cppmode" if os.path.basename(filename).endswith(".cpp")
+                    else "cmode"))
 
     @staticmethod
     def analyzeModule(view):
