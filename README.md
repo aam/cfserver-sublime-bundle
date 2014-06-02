@@ -4,10 +4,11 @@
 This bundle brings C/C++ static analysis capabilities provided by Advanced Tools [Cfserver](http://www.adv-tools.com/) to Sublime Text. The following features are currently provided:
 
 * Errors/warnings reported by Cfserver.
+* Navigation to definition/usage
 
 Next on the list are:
-* Navigation to definition/usage
 * Code completion
+* Analysis on the fly(without need to save file)
 
 PRE-REQ
 =======
