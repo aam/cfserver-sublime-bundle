@@ -1,5 +1,8 @@
 [
     { "caption": "-", "id": "cfserver" },
     { "command": "cfserver_goto_def", "caption": "Go to Definition" },
-    { "command": "cfserver_goto_implementation", "caption": "Go to Implementation" },
+    { "command": "cfserver_find_usages", "caption": "Find Usages..." },
+    { "command": "cfserver_find_decls", "caption": "Find Declarators..." },
+    { "command": "cfserver_find_parents", "caption": "Find Parents..." },
+    { "command": "cfserver_find_inheritors", "caption": "Find Inheritors..." },
 ]

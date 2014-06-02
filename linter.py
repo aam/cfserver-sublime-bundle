@@ -512,33 +512,12 @@ def is_supported_language(view):
             view.score_selector(caret, "source.c ")) > 0
 
 
-class CfserverGotoBase(sublime_plugin.TextCommand):
+class CfserverFind(sublime_plugin.TextCommand):
 
     """ Navigation command."""
 
-    def get_target(self, tu, data, offset, found_callback, folders):
-        pass
-
-    def found_callback(self, target):
-        if target is None:
-            sublime.status_message(
-                "Don't know where the %s is!" % self.goto_type)
-        elif not isinstance(target, list):
-            open(self.view, target)
-        else:
-            self.targets = target
-            self.view.window().show_quick_panel(target, self.open_file)
-
-    def open_file(self, idx):
-        if idx >= 0:
-            target = self.targets[idx]
-            if isinstance(target, list):
-                target = target[1]
-            open(self.view, target)
-
-    def run(self, edit):
-        print("CfserverGotoBase %s" % edit)
-        return
+    def set_find_command(self, find_command):
+        self.find_command = find_command
 
     def is_enabled(self):
         return is_supported_language(sublime.active_window().active_view())
@@ -546,17 +525,10 @@ class CfserverGotoBase(sublime_plugin.TextCommand):
     def is_visible(self):
         return is_supported_language(sublime.active_window().active_view())
 
-
-class CfserverGotoImplementation(CfserverGotoBase):
-    pass
-
-
-class CfserverGotoDef(CfserverGotoBase):
-
     """ Support navigation to definitions."""
 
     def run(self, edit):
-        """ Send goto-def request to Cfserver."""
+        """ Send find command request to Cfserver."""
         view = self.view
         offset = view.sel()[0].a
         #  text = view.word(offset)
@@ -568,16 +540,10 @@ class CfserverGotoDef(CfserverGotoBase):
         Cfserver.daemon.outputCollector.addHandler(UsagesHandler())
 
         daemon.sendCommand(
-            "goto-def \"%s\" %d" % (
-                view.file_name().replace("\\", "\\\\"), offset))
-
-    def handleUsages(self, message):
-        """ Handle USAGE defs Cfserver response."""
-        print("navigateToDef: %s" % (message))
-
-        # USAGES defs "Class"
-        # decl "c:\\Users\\alexander.APRELEV\\Documents\\test.cpp" 26 31 "class Class {" 2 6 11 "test.cpp" 20 33 norecursive
-        # USAGES-END
+            "%s \"%s\" %d" % (
+                self.find_command,
+                view.file_name().replace("\\", "\\\\"),
+                offset))
 
 
 class UsagesHandler(Handler):
@@ -597,12 +563,16 @@ class UsagesHandler(Handler):
     reUsage = re.compile(
         r'^(?P<type>.+) '
         r'\"(?P<filename>.+)\" '
-        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) .+\r?\n')
+        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
+        r'\"(?P<quote>[^\"]+)\" '
+        r'.+\r?\n',
+        re.MULTILINE)
 
     def proc(self, message):
         """ Parse and process usages reported by Cfserver."""
+        Cfserver.daemon.outputCollector.removeHandler(self)
+
         match = UsagesHandler.reUsages.match(message)
-        print("got message '%s' and match is '%s'" % (message, match))
         if match is None:
             return
 
@@ -610,16 +580,67 @@ class UsagesHandler(Handler):
         if matchUsage is None:
             return
 
+        hits = []
         for matchedUsage in matchUsage:
+            matchtype = matchedUsage.group('type')
             filename = matchedUsage.group('filename')
-            view = sublime.active_window().open_file(filename,
-                                                     sublime.TRANSIENT)
+            fromOfs = int(matchedUsage.group('fromOfs'))
+            toOfs = int(matchedUsage.group('toOfs'))
+            quote = bytes(matchedUsage.group('quote'),
+                          "ascii").decode("unicode_escape").strip()
+            print("quote is '%s'" % quote)
+            hits.append((matchtype, filename, fromOfs, toOfs, quote))
+
+        if len(hits) > 1:
+            sublime.active_window().show_quick_panel(
+                ["%s: %s" % (h[0], h[4]) for h in hits],
+                lambda index: UsagesHandler.selectHit(
+                    hits[index] if index != -1 else None))
+        elif len(hits) == 1:
+            UsagesHandler.selectHit(hits[0])
+
+    @staticmethod
+    def selectHit(hit):
+        if hit:
+            (matchtype, filename, fromOfs, toOfs, quote) = hit
+            view = sublime.active_window().open_file(filename)
             if view:
                 filename = view.file_name()
-                fromOfs = int(matchedUsage.group('fromOfs'))
-                toOfs = int(matchedUsage.group('toOfs'))
-
                 view.sel().clear()
                 view.sel().add(sublime.Region(fromOfs, toOfs))
-                view.show(view.sel())
-        print("that's all folks")
+                view.show_at_center(view.sel()[0])
+
+
+class CfserverGotoDef(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("goto-def")
+
+
+class CfserverFindUsages(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-usages")
+
+
+class CfserverFindDecls(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-declarators")
+
+
+class CfserverFindParents(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-parents")
+
+
+class CfserverFindInheritors(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-inheritors")
