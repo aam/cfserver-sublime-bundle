@@ -181,9 +181,9 @@ class Daemon:
 
         command_line = [cmd, '--codeblocks', '--disable-cancel']
         if in_log is not None and in_log != '':
-            command_line.append(['--inLogName', in_log])
+            command_line += ['--inLogName', in_log]
         if out_log is not None and out_log != '':
-            command_line.append(['--outLogName', out_log])
+            command_line += ['--outLogName', out_log]
 
         print("Starting %s" % (command_line))
 
