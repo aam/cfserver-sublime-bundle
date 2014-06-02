@@ -220,7 +220,7 @@ end-config
     def sendCommand(self, command):
         """ Send new command to Cfserver executable."""
         print(">> %s" % (command))
-        self.proc.stdin.write(bytes(command + "\n", "ascii"))
+        self.proc.stdin.write(bytes("%s%s" % (command, os.linesep), "ascii"))
         self.proc.stdin.flush()
 
     def isFileRegistered(self, filename):
@@ -539,19 +539,16 @@ class CfserverFind(sublime_plugin.TextCommand):
         """ Send find command request to Cfserver."""
         view = self.view
         offset = view.sel()[0].a
-        #  text = view.word(offset)
-        print("looking for definition of '%s'" % edit)
 
         daemon = Cfserver.getDaemon()
-        Cfserver.registerFileIfNotLoaded(view.file_name())
-
-        Cfserver.daemon.outputCollector.addHandler(UsagesHandler())
+        daemon.outputCollector.addHandler(UsagesHandler())
 
         daemon.sendCommand(
             "%s \"%s\" %d" % (
                 self.find_command,
                 view.file_name().replace("\\", "\\\\"),
                 offset))
+        Cfserver.analyzeModule(view)
 
 
 class UsagesHandler(Handler):
