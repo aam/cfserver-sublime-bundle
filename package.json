@@ -1,20 +1,16 @@
 {
-    "schema_version": "0.1",
+    "schema_version": "2.0",
+
     "packages": [
         {
             "name": "Cfserver",
-            "description": "Frontend for C/C++ Cfserver analyzer",
-            "author": "Alexander Aprelev",
-            "homepage": "http://github.com/aam/cfserver-sublime-bundle",
-            "last_modified": "2014-05-27 00:30:00",
-            "platforms": {
-                "*": [
-                    {
-                        "version": "1.0.41",
-                        "url": "http://github.com/aam/cfserver-sublime-bundle-dist/cfserver-sublime-bundle-0.1.sublime-package"
-                    }
-                ]
-            }
+            "details": "https://github.com/aam/cfserver-sublime-bundle",
+            "releases": [
+                {
+                    "sublime_text": "*",
+                    "details": "https://github.com/aam/cfserver-sublime-bundle/tags"
+                }
+            ]
         }
     ]
 }
