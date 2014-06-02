@@ -208,11 +208,11 @@ g++
 end-config
 ''', "ascii"))
 
-    def restartIfInactive(self, cmd):
+    def restartIfInactive(self, cmd, in_log, out_log):
         """ Restart process if it was never started or if it exited."""
 
         if (self.proc is None or self.proc.poll() is not None):
-            self.start(cmd)
+            self.start(cmd, in_log, out_log)
             return True
         else:
             return False
@@ -266,7 +266,9 @@ class Cfserver():
             restarted = True
         else:
             restarted = Cfserver.daemon.restartIfInactive(
-                Cfserver.cfserverExecutable())
+                Cfserver.cfserverExecutable(),
+                Cfserver.cfserverInLog(),
+                Cfserver.cfserverOutLog())
 
         if (restarted):
             Cfserver.daemon.outputCollector.addHandler(ErrorsHandler())
