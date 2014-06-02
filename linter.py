@@ -15,6 +15,7 @@ import threading
 import re
 import queue
 import bisect
+import time
 
 import sublime
 import sublime_plugin
@@ -299,10 +300,15 @@ class Cfserver():
         daemon = Cfserver.getDaemon()
         if (not daemon.isFileRegistered(filename)):
             daemon.registerFile(filename)
-            daemon.sendCommand("module \"%s\" %s" % (
-                filename.replace("\\", "\\\\"),
-                "cppmode" if os.path.basename(filename).endswith(".cpp")
-                else "cmode"))
+            basename = os.path.basename(filename)
+            print("registerFileIfNotLoaded basename='%s'" % basename)
+            if basename.endswith(".h") or basename.endswith(".hh"):
+                pass
+            else:
+                daemon.sendCommand("module \"%s\" %s" % (
+                    filename.replace("\\", "\\\\"),
+                    "cmode" if os.path.basename(filename).endswith(".c")
+                    else "cppmode"))
             return True
         else:
             return False
@@ -604,11 +610,23 @@ class UsagesHandler(Handler):
         if hit:
             (matchtype, filename, fromOfs, toOfs, quote) = hit
             view = sublime.active_window().open_file(filename)
-            if view:
-                filename = view.file_name()
+            if view.is_loading():
+                threading.Thread(
+                    target=UsagesHandler.navigate_to_location_once_loaded,
+                    args=(view, hit)).start()
+            else:
                 view.sel().clear()
                 view.sel().add(sublime.Region(fromOfs, toOfs))
                 view.show_at_center(view.sel()[0])
+
+    @staticmethod
+    def navigate_to_location_once_loaded(view, hit):
+        while view.is_loading():
+            time.sleep(1)  # sleep for 1 sec
+        view.sel().clear()
+        (matchtype, filename, fromOfs, toOfs, quote) = hit
+        view.sel().add(sublime.Region(fromOfs, toOfs))
+        view.show_at_center(view.sel()[0])
 
 
 class CfserverGotoDef(CfserverFind):
