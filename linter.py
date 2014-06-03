@@ -206,6 +206,7 @@ end-config
 begin-config cppmode
 g++
 end-config
+option +deCR_on
 ''', "ascii"))
 
     def restartIfInactive(self, cmd, in_log, out_log):
