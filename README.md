@@ -18,7 +18,20 @@ You will need to have [Cfserver](http://www.adv-tools.com/) binary for your OS a
 INSTALLATION
 ============
 
-Option to install from [Package Control](https://sublime.wbond.net/) is to come yet.
+### Using Package Control
+
+Installing through the [Package Control][1] plugin is the recommended way:
+
+- Open the command palette (<kbd>Ctrl+Shift+P</kbd> or <kbd>⌘+Shift+P</kbd>)
+- Type 'install'
+- Select **Package Control: Install Package**
+- Type 'Cfserver'
+- Select 'Cfserver'
+
+You may need to restart ST3 before you can start using all the features in the
+package.
+
+### Manually
 
 To install this package manually, copy the the contents of this repository to a
 new directory in the Sublime packages directory (on OSX:
