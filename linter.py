@@ -538,18 +538,25 @@ class CfserverFind(sublime_plugin.TextCommand):
 
     def run(self, edit):
         """ Send find command request to Cfserver."""
+
+        daemon = Cfserver.getDaemon()
+        daemon.outputCollector.addHandler(self.handler())
+
+        daemon.sendCommand(self.command())
+        Cfserver.analyzeModule(self.view)
+
+class CfserverContextFind(CfserverFind):
+    def handler(self):
+        return UsagesHandler()
+
+    def command(self):
         view = self.view
         offset = view.sel()[0].a
 
-        daemon = Cfserver.getDaemon()
-        daemon.outputCollector.addHandler(UsagesHandler())
-
-        daemon.sendCommand(
-            "%s \"%s\" %d" % (
+        return "%s \"%s\" %d" % (
                 self.find_command,
                 view.file_name().replace("\\", "\\\\"),
-                offset))
-        Cfserver.analyzeModule(view)
+                offset)
 
 
 class UsagesHandler(Handler):
@@ -560,29 +567,31 @@ class UsagesHandler(Handler):
         """ Initialize handler."""
         super().__init__("USAGES", self.proc)
 
-    reUsages = re.compile(
-        r'((.*)(\r?\n))*^USAGES (?P<type>.+) \"(?P<name>.+)\"\r?\n'
-        r'(?P<allusages>((.+)\r?\n)+)'
-        r'^USAGES-END(\r?\n)?',
-        re.MULTILINE)
+    def reUsages(self):
+        return re.compile(
+            r'((.*)(\r?\n))*^USAGES (?P<type>.+) \"(?P<name>.+)\"\r?\n'
+            r'(?P<allusages>((.+)\r?\n)+)'
+            r'^USAGES-END(\r?\n)?',
+            re.MULTILINE)
 
-    reUsage = re.compile(
-        r'^(?P<type>.+) '
-        r'\"(?P<filename>.+)\" '
-        r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
-        r'\"(?P<quote>[^\"]+)\" '
-        r'.+\r?\n',
-        re.MULTILINE)
+    def reUsage(self):
+        return re.compile(
+            r'^(?P<type>.+) '
+            r'\"(?P<filename>.+)\" '
+            r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
+            r'\"(?P<quote>[^\"]+)\" '
+            r'.+\r?\n',
+            re.MULTILINE)
 
     def proc(self, message):
         """ Parse and process usages reported by Cfserver."""
         Cfserver.daemon.outputCollector.removeHandler(self)
 
-        match = UsagesHandler.reUsages.match(message)
+        match = self.reUsages().match(message)
         if match is None:
             return
 
-        matchUsage = UsagesHandler.reUsage.finditer(match.group('allusages'))
+        matchUsage = self.reUsage().finditer(match.group('allusages'))
         if matchUsage is None:
             return
 
@@ -629,36 +638,71 @@ class UsagesHandler(Handler):
         view.show_at_center(view.sel()[0])
 
 
-class CfserverGotoDef(CfserverFind):
+class CfserverGotoDef(CfserverContextFind):
 
     def __init__(self, view):
         super().__init__(view)
         self.set_find_command("goto-def")
 
 
-class CfserverFindUsages(CfserverFind):
+class CfserverFindUsages(CfserverContextFind):
 
     def __init__(self, view):
         super().__init__(view)
         self.set_find_command("find-usages")
 
 
-class CfserverFindDecls(CfserverFind):
+class CfserverFindDecls(CfserverContextFind):
 
     def __init__(self, view):
         super().__init__(view)
         self.set_find_command("find-declarators")
 
 
-class CfserverFindParents(CfserverFind):
+class CfserverFindParents(CfserverContextFind):
 
     def __init__(self, view):
         super().__init__(view)
         self.set_find_command("find-parents")
 
 
-class CfserverFindInheritors(CfserverFind):
+class CfserverFindInheritors(CfserverContextFind):
 
     def __init__(self, view):
         super().__init__(view)
         self.set_find_command("find-inheritors")
+
+
+class UsagesNamesHandler(UsagesHandler):
+
+    """ Handler for USAGES NAMES Cfserver response."""
+
+    def reUsages(self):
+        return re.compile(
+            r'((.*)(\r?\n))*^USAGES (?P<type>.+) \"(?P<name>.*)\" \"(?P<arg>.+)\"\r?\n'
+            r'(?P<allusages>((.+)\r?\n)+)'
+            r'^USAGES-END(\r?\n)?',
+            re.MULTILINE)
+
+    def reUsage(self):
+        return re.compile(
+            r'^(?P<type>.+) '
+            r'\"(?P<filename>.+)\" '
+            r'\"(?P<filename1>.+)\" '
+            r'(?P<somenum>\d+) '
+            r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
+            r'\"(?P<quote>[^\"]+)\" '
+            r'.+\r?\n',
+            re.MULTILINE)
+
+class CfserverFindNames(CfserverFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-names")
+
+    def handler(self):
+        return UsagesNamesHandler()
+
+    def command(self):
+        return "%s \"%s\" \"%s\"" % (self.find_command, "", "system")

@@ -1,0 +1,3 @@
+[
+	{ "keys": ["ctrl+alt+n"], "command": "cfserver_find_names" },
+]

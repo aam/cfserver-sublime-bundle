@@ -1,0 +1,4 @@
+Cfserver Sublime plugin 0.0.3
+-----------------------------
+
+- Name navigation command added to Tools menu "Find C/C++ name...". ctrl-alt-n is default keyboard shortcut.

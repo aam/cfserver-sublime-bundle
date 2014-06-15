@@ -1,5 +1,21 @@
 [
 	{
+		"caption": "Tools",
+		"id": "tools",
+		"mnemonic": "T",
+		"children":
+		[
+			{ "caption": "-", "id": "end" },
+			{ "caption": "-", },
+			{
+				"caption": "Find C/C++ names...",
+				"command": "cfserver_find_names",
+				"mnemonic": "n"
+			},
+		]
+
+	},
+	{
 		"caption": "Preferences",
 		"id": "preferences",
 		"mnemonic": "n",
@@ -34,5 +50,5 @@
 				]
 			}
 		]
-	}
+	},
 ]
