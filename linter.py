@@ -580,7 +580,7 @@ class UsagesHandler(Handler):
             r'^(?P<type>.+) '
             r'\"(?P<filename>.+)\" '
             r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
-            r'\"(?P<quote>[^\"]+)\" '
+            r'\"(?P<quote>(?:[^"\\]|\\.)*)\" '
             r'.+\r?\n',
             re.MULTILINE)
 
@@ -604,7 +604,6 @@ class UsagesHandler(Handler):
             toOfs = int(matchedUsage.group('toOfs'))
             quote = bytes(matchedUsage.group('quote'),
                           "ascii").decode("unicode_escape").strip()
-            print("quote is '%s'" % quote)
             hits.append((matchtype, filename, fromOfs, toOfs, quote))
 
         if len(hits) > 1:
@@ -692,18 +691,86 @@ class UsagesNamesHandler(UsagesHandler):
             r'\"(?P<filename1>.+)\" '
             r'(?P<somenum>\d+) '
             r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
-            r'\"(?P<quote>[^\"]+)\" '
-            r'.+\r?\n',
+            r'\"(?P<quote>(?:[^"\\]|\\.)*)\" '
+            r'.*\r?\n',
             re.MULTILINE)
 
-class CfserverFindNames(CfserverFind):
 
-    def __init__(self, view):
-        super().__init__(view)
-        self.set_find_command("find-names")
+class CfserverGlobalFind(CfserverFind):
 
     def handler(self):
         return UsagesNamesHandler()
 
     def command(self):
         return "%s \"%s\" \"%s\"" % (self.find_command, "", "system")
+
+
+class CfserverFindNames(CfserverGlobalFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-names")
+
+
+class CfserverFindMacros(CfserverGlobalFind):
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-macros")
+
+
+class UsagesFileNamesHandler(UsagesNamesHandler):
+
+    """ Handler for USAGES filenames Cfserver response."""
+
+    def reUsage(self):
+        return re.compile(
+            r'^(?P<type>.+) '
+            r'\"(?P<filename>.+)\" '
+            r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
+            r'\"(?P<string>[^\"]*)\" '
+            r'(?P<num1>\d+) (?P<num2>\d+) (?P<num3>\d+) '
+            r'\"(?P<quote>(?:[^"\\]|\\.)*)\" '
+            r'(?P<num4>\d+) (?P<num5>\d+) '
+            r'(?P<recursive>.+)'
+            r'\r?\n',
+            re.MULTILINE)
+
+
+class CfserverFindFiles(CfserverGlobalFind):
+
+    def handler(self):
+        return UsagesFileNamesHandler()
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-files")
+
+
+class UsagesStringsNamesHandler(UsagesNamesHandler):
+
+    """ Handler for USAGES strings Cfserver response."""
+
+    def reUsage(self):
+        return re.compile(
+            r'^(?P<type>.+) '
+            r'\"(?P<filename>.+)\" '
+            r'(?P<fromOfs>\d+) (?P<toOfs>\d+) '
+            r'\"(?P<quote>(?:[^"\\]|\\.)*)\" '
+            r'(?P<num1>\d+) (?P<num2>\d+) (?P<num3>\d+) '
+            r'\"(?P<filename1>[^\"]+)\" '
+            r'(?P<num4>\d+) (?P<num5>\d+) '
+            r'(?P<recursive>.+)'
+            r'\r?\n',
+            re.MULTILINE)
+
+
+
+class CfserverFindStrings(CfserverGlobalFind):
+
+    def handler(self):
+        return UsagesStringsNamesHandler()
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-strings")

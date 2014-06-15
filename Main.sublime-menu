@@ -12,6 +12,21 @@
 				"command": "cfserver_find_names",
 				"mnemonic": "n"
 			},
+			{
+				"caption": "Find C/C++ macros...",
+				"command": "cfserver_find_macros",
+				"mnemonic": "n"
+			},
+			{
+				"caption": "Find C/C++ files...",
+				"command": "cfserver_find_files",
+				"mnemonic": "n"
+			},
+			{
+				"caption": "Find C/C++ strings...",
+				"command": "cfserver_find_strings",
+				"mnemonic": "n"
+			},
 		]
 
 	},
