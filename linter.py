@@ -484,6 +484,7 @@ class CfserverEventListener(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
         """ Handle on_query_completions event."""
+        return []
         if is_supported_language(view) and view.file_name is not None:
             print("on_query_completions: in %s with %s at %s " %
                   (view, prefix, locations))
