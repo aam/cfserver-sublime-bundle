@@ -3,4 +3,5 @@
 	{ "keys": ["ctrl+alt+m"], "command": "cfserver_find_macros" },
 	{ "keys": ["ctrl+alt+g"], "command": "cfserver_find_strings" },
 	{ "keys": ["ctrl+alt+f"], "command": "cfserver_find_files" },
+	{ "keys": ["ctrl+f12"], "command": "cfserver_find_names_in_file" },
 ]

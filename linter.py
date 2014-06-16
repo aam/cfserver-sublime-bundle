@@ -712,6 +712,25 @@ class CfserverFindNames(CfserverGlobalFind):
         self.set_find_command("find-names")
 
 
+class CfserverFindNamesInFile(CfserverFind):
+
+    def handler(self):
+        return UsagesNamesHandler()
+
+    def command(self):
+        view = self.view
+
+        return "%s \"%s\" \"\"" % (
+                self.find_command,
+                view.file_name().replace("\\", "\\\\"))
+
+        return "%s \"%s\" \"%s\"" % (self.find_command, "", "system")
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.set_find_command("find-names-in-file")
+
+
 class CfserverFindMacros(CfserverGlobalFind):
 
     def __init__(self, view):

@@ -1,0 +1,4 @@
+Cfserver Sublime plugin 0.0.4
+-----------------------------
+
+- String/file/macro navigation command added 
